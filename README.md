@@ -35,43 +35,103 @@
 
 </html>
 
-// *****************************************************************************
-// Server.js - This file is the initial starting point for the Node/Express server.
-//
-// ******************************************************************************
-// *** Dependencies
-// =============================================================
-var express = require("express");
-var bodyParser = require("body-parser");
-
-// Sets up the Express App
-// =============================================================
-var app = express();
-var PORT = process.env.PORT || 8080;
-
-// Requiring our models for syncing
-var db = require("./models");
-
-// Sets up the Express app to handle data parsing
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.text());
-app.use(bodyParser.json({ type: "application/vnd.api+json" }));
-
-// Static directory
-app.use(express.static("public"));
+var db = require("../models");
 
 // Routes
 // =============================================================
-require("./routes/api-routes.js")(app);
+module.exports = function(app) {
 
-// Syncing our sequelize models and then starting our Express app
-// =============================================================
-db.sequelize.sync().then(function() {
-  app.listen(PORT, function() {
-    console.log("App listening on PORT " + PORT);
+  // GET route for getting all of the todos
+  app.get("/api/todos", function(req, res) {
+    // findAll returns all entries for a table when used with no options
+    db.Todo.findAll({}).then(function(dbTodo) {
+      // We have access to the todos as an argument inside of the callback function
+      res.json(dbTodo);
+    });
   });
+
+  // POST route for saving a new todo
+  app.post("/api/todos", function(req, res) {
+    // create takes an argument of an object describing the item we want to
+    // insert into our table. In this case we just we pass in an object with a text
+    // and complete property
+    db.Todo.create({
+      text: req.body.text,
+      complete: req.body.complete
+    }).then(function(dbTodo) {
+      // We have access to the new todo as an argument inside of the callback function
+      res.json(dbTodo);
+    });
+  });
+
+  // DELETE route for deleting todos. We can get the id of the todo to be deleted from
+  // req.params.id
+  app.delete("/api/todos/:id", function(req, res) {
+    // We just have to specify which todo we want to destroy with "where"
+    db.Todo.destroy({
+      where: {
+        id: req.params.id
+      }
+    }).then(function(dbTodo) {
+      res.json(dbTodo);
+    });
+
+  });
+
+  // PUT route for updating todos. We can get the updated todo data from req.body
+  app.put("/api/todos", function(req, res) {
+    // Update takes in an object describing the properties we want to update, and
+    // we use where to describe which objects we want to update
+    db.Todo.update({
+      text: req.body.text,
+      complete: req.body.complete
+    }, {
+      where: {
+        id: req.body.id
+      }
+    }).then(function(dbTodo) {
+      res.json(dbTodo);
+    });
+  });
+
+};
+
+'use strict';
+
+var fs        = require('fs');
+var path      = require('path');
+var Sequelize = require('sequelize');
+var basename  = path.basename(module.filename);
+var env       = process.env.NODE_ENV || 'development';
+var config    = require(__dirname + '/../config/config.json')[env];
+var db        = {};
+
+if (config.use_env_variable) {
+  var sequelize = new Sequelize(process.env[config.use_env_variable]);
+} else {
+  var sequelize = new Sequelize(config.database, config.username, config.password, config);
+}
+
+fs
+  .readdirSync(__dirname)
+  .filter(function(file) {
+    return (file.indexOf('.') !== 0) && (file !== basename) && (file.slice(-3) === '.js');
+  })
+  .forEach(function(file) {
+    var model = sequelize['import'](path.join(__dirname, file));
+    db[model.name] = model;
+  });
+
+Object.keys(db).forEach(function(modelName) {
+  if (db[modelName].associate) {
+    db[modelName].associate(db);
+  }
 });
+
+db.sequelize = sequelize;
+db.Sequelize = Sequelize;
+
+module.exports = db;
 
 module.exports = function(sequelize, DataTypes) {
   var Todo = sequelize.define("Todo", {
